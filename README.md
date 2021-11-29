@@ -1,0 +1,1 @@
+# cpu-miner-gr-avx2
