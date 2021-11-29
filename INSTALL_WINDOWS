@@ -1,0 +1,157 @@
+Instructions for compiling cpuminer-gr for Windows.
+
+The instructions may be out of date. Please consult the wiki for
+the latest:
+
+Windows compilation using Visual Studio is not supported. Mingw64 is
+used on a Linux system (bare metal or virtual machine) to cross-compile
+cpuminer-gr executable binaries for Windows.
+
+These instructions were written for Debian and Ubuntu compatible distributions
+but should work on other major distributions as well. However some of the
+package names or file paths may be different.
+
+It is assumed a Linux system is already available and running. And the user
+has enough Linux knowledge to find and install packages and follow these
+instructions.
+
+First it is a good idea to create new user specifically for cross compiling.
+It keeps all mingw stuff contained and isolated from the rest of the system.
+
+Step by step...
+
+1. Install necessary packages from the distribution's repositories.
+
+Refer to Linux compile instructions and install required packages.
+
+Additionally, install mingw-w64.
+
+sudo apt-get install mingw-w64 libz-mingw-w64-dev
+
+
+2. Create a local library directory for packages to be compiled in the next
+   step. Suggested location is $HOME/usr/lib/
+
+$ mkdir $HOME/usr/lib
+
+3. Download and build other packages for mingw that don't have a mingw64
+   version available in the repositories.
+
+Download the following source code packages from their respective and
+respected download locations, copy them to ~/usr/lib/ and uncompress them. 
+
+openssl: https://github.com/openssl/openssl/releases
+
+curl: https://github.com/curl/curl/releases
+
+gmp: https://gmplib.org/download/gmp/
+
+In most cases the latest version is ok but it's safest to download the same major and minor version as included in your distribution. The following uses versions from Ubuntu 20.04. Change version numbers as required.
+
+Run the following commands or follow the supplied instructions. Do not run "make install" unless you are using /usr/lib, which isn't recommended.
+
+Some instructions insist on running "make check". If make check fails it may still work, YMMV.
+
+You can speed up "make" by using all CPU cores available with "-j n" where n is the number of CPU threads you want to use.
+
+openssl:
+
+$ ./Configure mingw64 shared --cross-compile-prefix=x86_64-w64-mingw32-
+$ make
+
+Make may fail with an ld error, just ensure libcrypto-1_1-x64.dll is created.
+
+curl:
+Download from git, do not use archives in release.
+
+# sudo apt-get install autoconf automake libtool perl
+$ autoreconf -fi
+$ ./configure --with-winssl --with-winidn --with-schannel --host=x86_64-w64-mingw32
+$ make
+
+gmp:
+
+$ ./configure --host=x86_64-w64-mingw32
+$ make
+
+4. Tweak the environment.
+
+This step is required everytime you login or the commands can be added to .bashrc.
+
+Define some local variables to point to local library.
+
+$ export LOCAL_LIB="$HOME/usr/lib"
+
+$ export CONFIGURE_ARGS="--with-curl=$LOCAL_LIB/curl --with-crypto=$LOCAL_LIB/openssl --host=x86_64-w64-mingw32"
+
+$ export MINGW_LIB="/usr/x86_64-w64-mingw32/lib"
+
+Adjust for gcc version:
+
+$ export GCC_MINGW_LIB="/usr/lib/gcc/x86_64-w64-mingw32/9.3-win32"
+                                                        10-win32
+
+Create a release directory and copy some dll files previously built. This can be done outside of cpuminer-opt and only needs to be done once. If the release directory is in cpuminer-opt directory it needs to be recreated every time a source package is decompressed.
+
+$ mkdir release
+$ cp $MINGW_LIB/zlib1.dll release/
+$ cp $MINGW_LIB/libwinpthread-1.dll release/
+$ cp $GCC_MINGW_LIB/libstdc++-6.dll release/
+$ cp $GCC_MINGW_LIB/libgcc_s_seh-1.dll release/
+$ cp $LOCAL_LIB/openssl/libcrypto-1_1-x64.dll release/
+$ cp $LOCAL_LIB/curl/lib/.libs/libcurl-4.dll release/
+
+The following steps need to be done every time a new source package is
+opened.
+
+5. Download cpuminer-gr
+
+Download the latest source code package of cpumuner-opt to your desired
+location. .zip or .tar.gz, your choice.
+
+https://github.com/WyvernTKC/cpuminer-gr-avx2/releases
+
+$ git clone https://github.com/WyvernTKC/cpuminer-gr-avx2 cpuminer-gr
+
+Decompress and change to the cpuminer-gr directory.
+
+6. compile
+
+Create a link to the locally compiled version of gmp.h
+
+$ export LDFLAGS="-L$LOCAL_LIB/curl/lib/.libs -L$LOCAL_LIB/gmp/.libs -L$LOCAL_LIB/openssl"
+
+$ rm ./gmp.h 2>/dev/null
+$ ln -s $LOCAL_LIB/gmp/gmp.h ./gmp.h
+
+$ make distclean
+$ rm -f config.status
+$ ./autogen.sh
+
+Configure the compiler for the CPU architecture of the host machine:
+
+$ export DCFLAGS="-fno-common -D_WIN32_WINNT=0x0601"
+
+For GCC-10+:
+CFLAGS="-O3 -march=native -mtune=native ${DCFLAGS}" \
+CXXFLAGS="$CFLAGS -std=c++20 -Wno-ignored-attributes" \
+./configure ${CONFIGURE_ARGS}
+
+For GCC-8 && GCC-9:
+CFLAGS="-O3 -march=native -mtune=native ${DCFLAGS}" \
+CXXFLAGS="$CFLAGS -std=c++2a -fconcepts -Wno-ignored-attributes" \
+./configure ${CONFIGURE_ARGS}
+
+You can find several examples in README.txt
+
+Once you have run configure successfully run the compiler with n CPU threads:
+
+$ make -j $(nproc)
+
+Copy cpuminer.exe to the release directory, compress and copy the release directory to a Windows system and run cpuminer.exe from the command line.
+
+Run cpuminer
+
+In a command windows change directories to the unzipped release folder. to get a list of all options:
+
+cpuminer.exe --help
